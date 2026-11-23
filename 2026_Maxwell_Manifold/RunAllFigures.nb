@@ -1,0 +1,28 @@
+(* Content-type: application/vnd.wolfram.mathematica *)
+(* Consolidated launcher. Figure and CSV export instructions unchanged. *)
+Notebook[{
+ Cell["Maxwell tuning manifolds: all ten figures","Title"],
+ Cell["Consolidated Mathematica 9 launcher, 21 November 2026. Uses numerical package version 3.2.5, with the Figure 10 precision-management repair. The Figure 1-9 routines are unchanged.","Subtitle"],
+ Cell["Keep this notebook beside MaxwellManifoldFeasibility.m. Start a fresh local kernel using Evaluation > Quit Kernel > Local, then choose Evaluation > Evaluate Notebook to run all sections in order. You may also evaluate the input cells one at a time with Shift+Enter. Save the notebook after the run to retain the displayed figures.","Text"],
+ Cell["PDF figures are written to the figures folder and CSV files to the data folder beside the package. Existing files with matching names are overwritten. Each calculation block displays its returned figures directly below its input cell. The six spherical figures appear together when their block finishes. The spheroidal calculation and critical-point scan can take substantial time.","Text"],
+ Cell["1. Load the existing package","Section"],
+ Cell[BoxData[RowBox[{"maxwellLauncherReady","=","False",";",RowBox[{"Get","[",RowBox[{RowBox[{"FileNameJoin","[",RowBox[{RowBox[{"{",RowBox[{RowBox[{"NotebookDirectory","[","]"}],",","\"MaxwellManifoldFeasibility.m\""}],"}"}]}],"]"}]}],"]"}]}]],"Input"],
+ Cell["2. Run SelfTest","Section"],
+ Cell["A successful test prints SelfTest PASS v3.2.5 and returns True. The figure sections run only after this loading-and-test sequence has succeeded.","Text"],
+ Cell[BoxData[RowBox[{"maxwellLauncherReady","=",RowBox[{"TrueQ","[",RowBox[{RowBox[{"MaxwellManifoldFeasibility`SelfTest","[","]"}]}],"]"}]}]],"Input"],
+ Cell["Figure 1: spheroidal consistency check","Section"],
+ Cell["The Figure 1 plot is displayed below when this calculation finishes.","Text"],
+ Cell[BoxData[RowBox[{"If","[",RowBox[{RowBox[{"TrueQ","[",RowBox[{"maxwellLauncherReady"}],"]"}],",",RowBox[{"MaxwellManifoldFeasibility`RunSpheroidStudy","[","]"}],",",RowBox[{"Print","[",RowBox[{"\"Run the loading and SelfTest cells successfully first.\""}],"]"}]}],"]"}]],"Input"],
+ Cell["Figures 2-7: spherical study, including the repaired Figure 7","Section"],
+ Cell["This unchanged block generates Figures 2, 3, 4, 5, 6, and 7 once each. All six plots are displayed below in that order. Figure 7 is already included; no separate repair notebook or additional Figure 7 call is needed.","Text"],
+ Cell[BoxData[RowBox[{"If","[",RowBox[{RowBox[{"TrueQ","[",RowBox[{"maxwellLauncherReady"}],"]"}],",",RowBox[{"MaxwellManifoldFeasibility`RunSphericalStudy","[","]"}],",",RowBox[{"Print","[",RowBox[{"\"Run the loading and SelfTest cells successfully first.\""}],"]"}]}],"]"}]],"Input"],
+ Cell["Figure 8: critical-point map","Section"],
+ Cell["The Figure 8 plot is displayed below when the scan finishes.","Text"],
+ Cell[BoxData[RowBox[{"If","[",RowBox[{RowBox[{"TrueQ","[",RowBox[{"maxwellLauncherReady"}],"]"}],",",RowBox[{"MaxwellManifoldFeasibility`RunCriticalMap","[","]"}],",",RowBox[{"Print","[",RowBox[{"\"Run the loading and SelfTest cells successfully first.\""}],"]"}]}],"]"}]],"Input"],
+ Cell["Figure 9: fixed-power resource and sensitivity","Section"],
+ Cell["The Figure 9 plot is displayed below when this calculation finishes.","Text"],
+ Cell[BoxData[RowBox[{"If","[",RowBox[{RowBox[{"TrueQ","[",RowBox[{"maxwellLauncherReady"}],"]"}],",",RowBox[{"MaxwellManifoldFeasibility`RunDesignStudy","[","]"}],",",RowBox[{"Print","[",RowBox[{"\"Run the loading and SelfTest cells successfully first.\""}],"]"}]}],"]"}]],"Input"],
+ Cell["Figure 10: weak-loss continuations","Section"],
+ Cell["The Figure 10 plot is displayed below when this calculation finishes. To regenerate only Figure 10, evaluate the loading cell and SelfTest cell, then this final figure cell. The other nine figure sections can be left unevaluated.","Text"],
+ Cell[BoxData[RowBox[{"If","[",RowBox[{RowBox[{"TrueQ","[",RowBox[{"maxwellLauncherReady"}],"]"}],",",RowBox[{"MaxwellManifoldFeasibility`RunWeakLossStudy","[","]"}],",",RowBox[{"Print","[",RowBox[{"\"Run the loading and SelfTest cells successfully first.\""}],"]"}]}],"]"}]],"Input"]
+},WindowSize->{1200,900},StyleDefinitions->"Default.nb"]

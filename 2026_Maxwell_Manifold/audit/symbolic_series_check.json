@@ -1,0 +1,17 @@
+{
+  "status": "PASS",
+  "trace_ratios_TE": [
+    "-2*t**2/735 - 2*t/7 + 5",
+    "17*t**2/735 - 11*t/7 + 10",
+    "223*t**2/735 - 36*t/7 + 20"
+  ],
+  "trace_ratios_TM": [
+    "t**2/350 - 2*t/5 + 2",
+    "-t**2/10 + t",
+    "t**2/2"
+  ],
+  "TM_R22_cubic_coefficient": 0,
+  "Phi0": "-(-7*epsilon*mu + 2*mu**2*w + 22*mu*w - 14*mu + 36*w)/(28*mu)",
+  "Phi2": "-(4*epsilon*mu**3*w - 68*epsilon*mu**2*w + 294*epsilon*mu**2 - 446*epsilon*mu*w + 735*epsilon*mu - 210*mu**2*w + 294*mu**2 + 3780*w)/(2940*mu)",
+  "scope": "Exact finite series algebra; uniform analytic remainder proved in manuscript."
+}

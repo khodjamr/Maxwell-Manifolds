@@ -1,0 +1,9 @@
+cff-version: 1.2.0
+message: "Please cite the accompanying manuscript and the specific archived release of this reproducibility package."
+title: "Reproducibility package for Maxwell Tuning Manifolds Quadratic Structure and Critical Transitions"
+type: software
+authors:
+  - family-names: Khodja
+    given-names: Mohamed R.
+version: "2026-11-23-audit"
+date-released: 2026-11-23

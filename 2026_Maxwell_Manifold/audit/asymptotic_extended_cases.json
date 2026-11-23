@@ -1,0 +1,52 @@
+[
+  {
+    "case": "original",
+    "epsilon": -3.0,
+    "mu": -2.5,
+    "w": 1.69,
+    "power_leading_slope": 1.9981821806823015,
+    "power_corrected_slope": 4.000137038357298,
+    "gradient_leading_slope": 2.0001328086962995,
+    "gradient_corrected_slope": 4.000152082403291
+  },
+  {
+    "case": "near_TE_root",
+    "epsilon": -2.4,
+    "mu": -8.9,
+    "w": 0.4,
+    "power_leading_slope": 2.001741808953744,
+    "power_corrected_slope": 4.0009540812849504,
+    "gradient_leading_slope": 2.001588270746813,
+    "gradient_corrected_slope": 4.000500804678394
+  },
+  {
+    "case": "coordinate_fold",
+    "epsilon": -1.497056274847714,
+    "mu": -4.242640687119285,
+    "w": 0.7,
+    "power_leading_slope": 1.9991568559617525,
+    "power_corrected_slope": 4.000719375129441,
+    "gradient_leading_slope": 2.0014012214406485,
+    "gradient_corrected_slope": 4.000285746195889
+  },
+  {
+    "case": "epsilon_negative",
+    "epsilon": -2.1,
+    "mu": 3.0,
+    "w": 0.3,
+    "power_leading_slope": 1.9989747371049624,
+    "power_corrected_slope": 4.000025622582883,
+    "gradient_leading_slope": 1.9994538590092423,
+    "gradient_corrected_slope": 4.000155255061432
+  },
+  {
+    "case": "mu_negative",
+    "epsilon": 3.0,
+    "mu": -2.1,
+    "w": 0.8,
+    "power_leading_slope": 2.000779011361203,
+    "power_corrected_slope": 4.000121643775146,
+    "gradient_leading_slope": 1.997880358402738,
+    "gradient_corrected_slope": 3.9994489255192613
+  }
+]

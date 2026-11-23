@@ -1,0 +1,22 @@
+{
+  "exact_replayers_standard_library_only": "PASS",
+  "full_independent_workflow": "PASS",
+  "isolated_driver_preserved_canonical_inputs": true,
+  "native_numerical_package_unchanged": true,
+  "native_launcher_unchanged": true,
+  "all_fourteen_csv_files_unchanged": true,
+  "exact_critical_certificate_inputs_unchanged": true,
+  "publication_drawing_stream_matches": 10,
+  "plotting_source_definitions": "unchanged apart from version metadata",
+  "plotting_control_adjustments": {
+    "figure_1_a": {
+      "old": 0.4,
+      "new": 0.35
+    },
+    "figure_2_a": {
+      "old": 0.33,
+      "new": 0.3
+    }
+  },
+  "fresh_native_mathematica_execution": false
+}

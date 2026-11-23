@@ -1,0 +1,26 @@
+{
+  "operator_identity_symbol_zero": true,
+  "electric_trace_preserved": true,
+  "magnetic_trace_preserved": true,
+  "proof_scope": "Analytic proof in manuscript; these are symbolic consistency checks only.",
+  "standard_tools": [
+    "Young convolution inequality",
+    "interior H2 regularity for the Laplacian",
+    "Hilbert-space orthogonal projection",
+    "Neumann series for bounded inverse",
+    "one-variable real-analytic factorization"
+  ],
+  "new_assumptions": [
+    "bounded Lipschitz V",
+    "complete exterior E,H fixed",
+    "two compatible Y(V) Cauchy lifts at distinct nonzero permeabilities",
+    "rho>0 and epsilon*mu != 0"
+  ],
+  "not_asserted": [
+    "compatibility of arbitrary raw data",
+    "a unique unconstrained forward transmission map",
+    "shape derivatives",
+    "critical points for every shape",
+    "arbitrary rough/fractal boundaries"
+  ]
+}

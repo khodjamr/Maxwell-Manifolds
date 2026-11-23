@@ -1,0 +1,9 @@
+# Optional independent numerical/symbolic workflow only.
+# These are the versions used for the 23 November 2026 audit.
+# Use Python 3.11 or later for these pinned scientific packages.
+# Mathematica reproduction and standard-library certificate replay do not need them.
+numpy==2.3.5
+scipy==1.17.0
+matplotlib==3.10.8
+mpmath==1.3.0
+sympy==1.14.0

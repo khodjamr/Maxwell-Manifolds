@@ -1,0 +1,1507 @@
+(* Mathematica 9 CSV replot notebook; publication layout synchronized 23 November 2026. *)
+Notebook[{
+
+Cell[CellGroupData[{
+Cell["Maxwell tuning manifolds: clean figures from CSV data", "Title"],
+
+Cell["\<\
+Mathematica 9.0 | version 1.0.11 | plain-code loader | 22 November 2026\
+\>", "Subtitle",
+ CellChangeTimes->{4.004329538169302*^9}],
+
+Cell["\<\
+Save this notebook beside the data folder. Select Evaluation > Evaluate \
+Notebook. The notebook loads the embedded plotting code, reads the eleven \
+primary CSV tables, displays all ten figures, and exports ten PDFs to \
+clean_figures beside this notebook. No .m package is needed and no Maxwell \
+calculation is rerun.\
+\>", "Text"],
+
+Cell["\<\
+This version replaces the definition-cell box encoding used in versions 1.0.0 \
+and 1.0.1. The complete program is stored as ordinary Wolfram source in the \
+closed group below and is loaded using InputForm. The CSV files and original \
+figures folder are not edited.\
+\>", "Text"],
+
+Cell[CellGroupData[{
+
+Cell["\<\
+Embedded plotting source (open this group only to inspect or edit the code)\
+\>", "Section"],
+
+Cell["\<\
+(* CSV-only figure preparation. Compatible with Mathematica 9.0.
+   No numerical Maxwell package, root solver, or certificate file is loaded. *)
+ClearAll[\"Global`mcf*\"];
+mcfVersion = \"1.0.11\";
+mcfReady = False;
+mcfTables = {};
+mcfFont = \"Times\";
+mcfLabelSize = 20;
+mcfTickSize = 17;
+mcfLegendSize = 16;
+(* Independent panel settings are entered beside each figure in the notebook.
+   Automatic preserves the previous width; a number is a fraction of plot \
+width. *)
+mcfLegendWidth[figure_Integer,panel_String] := Automatic;
+mcfBlue = RGBColor[0.0, 0.447, 0.698];
+mcfOrange = RGBColor[0.835, 0.369, 0.0];
+mcfGreen = RGBColor[0.0, 0.620, 0.451];
+mcfPurple = RGBColor[0.62, 0.35, 0.66];
+mcfBlack = GrayLevel[0.12];
+mcfGray = GrayLevel[0.55];
+(* Zero-loss derivatives from the manuscript, used only as Figure 10
+   reference normalizations. They are NOT recomputed by this notebook. *)
+mcfMagneticLossRates = {\"saddle\" -> 16.30703156275055,
+                       \"definite\" -> -0.02851444687408144};
+
+mcfFiles = {
+ {\"fig1_spheroid_convergence\", {\"lmax\", \"trace_E\", \"trace_H\", \
+\"affine_current_error\", \"quadratic_power_error\"}},
+ {\"fig2_static_profiles\", {\"polarization\", \"rho\", \"epsilon\", \"mu\", \
+\"scaled_exact_q\", \"scaled_static_q\"}},
+ {\"fig3_regular_tuning_graph\", {\"mu\", \"epsilon_exact\", \"epsilon_static\
+\", \"epsilon_second_order\", \"scaled_F_epsilon_exact\"}},
+ {\"fig4_asymptotic_convergence\", {\"rho\", \"power_leading_error\", \
+\"power_second_order_error\", \"gradient_leading_error\", \
+\"gradient_second_order_error\"}},
+ {\"fig5_saddle_reconnection\", {\"panel\", \"w\", \"branch\", \"sample\", \
+\"internal_k\", \"epsilon\", \"mu\"}},
+ {\"fig6_closed_loop_birth\", {\"dataset\", \"w\", \"branch\", \"sample\", \
+\"internal_k\", \"epsilon\", \"mu\", \"Delta\", \"normal_form_x\", \
+\"normal_form_y\"}},
+ {\"fig7_critical_scaling\", {\"type\", \"delta_w\", \
+\"material_distance_exact\", \"distance_quadratic_prediction\", \
+\"inverse_gradient_exact\", \"inverse_gradient_quadratic_prediction\"}},
+ {\"fig8_critical_map\", {\"rho\", \"w\", \"type\"}},
+ {\"fig8_discriminant_root_curves\", {\"rho\", \"k\", \"w\", \"branch\"}},
+ {\"fig9_design_interpretation\", {\"delta_w\", \"phase_radians\", \
+\"relative_epsilon_percent\", \"relative_mu_percent\", \
+\"fixed_power_resource_ratio\", \"relative_metric_inverse_sensitivity\"}},
+ {\"fig10_weak_loss\", {\"type\", \"loss\", \"eta_e\", \"eta_m\", \"w_shift\"}}
+};
+mcfOutputNames = {\"fig1_spheroid_convergence\", \"fig2_static_profiles\",
+ \"fig3_regular_tuning_graph\", \"fig4_asymptotic_convergence\", \
+\"fig5_saddle_reconnection\",
+ \"fig6_closed_loop_birth\", \"fig7_critical_scaling\", \"fig8_critical_map\",
+ \"fig9_design_interpretation\", \"fig10_weak_loss\"};
+
+mcfFail[text_] := (Print[Style[\"CLEAN FIGURES: \" <> text, Red]]; \
+Throw[$Failed, \"mcfFailure\"]);
+mcfFiniteQ[x_] := NumberQ[x] && TrueQ[Im[x] == 0] && FreeQ[x, Indeterminate | \
+ComplexInfinity | DirectedInfinity];
+mcfNearQ[a_, b_] := TrueQ[Abs[a-b] <= 10^-10 Max[1, Abs[a], Abs[b]]];
+mcfValue[record_, key_] := key /. record;
+mcfString[x_] := If[StringQ[x], StringTrim[x], ToString[x, InputForm]];
+mcfNumber[x_] := Module[{s},
+ If[NumberQ[x], Return[N[x]]];
+ s = StringTrim[x];
+ If[s == \"\", Return[\"\"]];
+ If[StringMatchQ[s, \
+RegularExpression[\"[+-]?([0-9]+(\\\\.[0-9]*)?|\\\\.[0-9]+)([eE][+-]?[0-9]+)?\
+\"]],
+  N[ToExpression[StringReplace[s, {\"e\" -> \"*^\", \"E\" -> \"*^\"}], \
+InputForm]], s]
+];
+mcfRead[name_, needed_] := Module[{path, raw, header, rows, positions, v, \
+blanks, j},
+ path = FileNameJoin[{mcfDataDirectory, name <> \".csv\"}];
+ If[!FileExistsQ[path], mcfFail[\"Missing required CSV file: \" <> path]];
+ raw = Quiet[Check[Import[path, \"CSV\"], $Failed]];
+ If[raw === $Failed || !ListQ[raw] || Length[raw] < 2,
+  mcfFail[\"Cannot read a nonempty CSV table: \" <> path]];
+ header = mcfString /@ First[raw]; rows = (mcfNumber /@ # &) /@ Rest[raw];
+ If[!And @@ (Length[#] <= Length[header] & /@ rows), mcfFail[\"Inconsistent \
+row width in \" <> name]];
+ rows = PadRight[#,Length[header],\"\"]& /@ rows;
+ If[Length[Union[header]] != Length[header], mcfFail[\"Duplicate CSV column \
+names in \" <> name]];
+ If[!And @@ (MemberQ[header, #] & /@ needed),
+  mcfFail[\"Required columns are missing from \" <> name <> \": \" <> \
+ToString[Complement[needed, header], InputForm]]];
+ blanks = {\"internal_k\", \"epsilon\", \"mu\", \"Delta\", \"normal_form_x\", \
+\"normal_form_y\"};
+ Do[positions = Flatten[Position[header, field, {1}]]; j = First[positions];
+  If[!MemberQ[{\"type\", \"loss\", \"dataset\", \"polarization\"}, field],
+   If[!And @@ (mcfFiniteQ[#] || (name == \"fig6_closed_loop_birth\" && \
+MemberQ[blanks, field] && # === \"\") & /@ rows[[All, j]]),
+    mcfFail[\"A required numerical column contains an invalid entry: \" <> \
+name <> \", \" <> field]]],
+  {field, needed}];
+ {\"Name\" -> name, \"Header\" -> header, \"Rows\" -> rows}
+];
+mcfTable[name_] := Module[{r = name /. mcfTables},
+ If[!ListQ[r], mcfFail[\"Table is not loaded: \" <> name]]; r];
+mcfIndex[t_, key_] := First[Flatten[Position[mcfValue[t, \"Header\"], key, \
+{1}]]];
+mcfRows[t_] := mcfValue[t, \"Rows\"];
+mcfColumn[t_, key_] := mcfRows[t][[All, mcfIndex[t, key]]];
+mcfXY[t_, rows_, x_, y_] := rows[[All, {mcfIndex[t, x], mcfIndex[t, y]}]];
+mcfSelect[t_, key_, value_] := Module[{j = mcfIndex[t, key]},
+ Select[mcfRows[t], If[NumberQ[value], mcfNearQ[#[[j]], value], #[[j]] === \
+value] &]];
+mcfUniqueNumbers[x_] := DeleteDuplicates[Sort[N[x]], mcfNearQ];
+
+mcfInitialize[directory_] := Catch[Block[{$IterationLimit=10000000},Module[{t},
+ mcfReady = False;
+ If[!StringQ[directory] || !DirectoryQ[directory], mcfFail[\"Save this \
+notebook in the folder containing data, then evaluate it again.\"]];
+ mcfBaseDirectory = ExpandFileName[directory];
+ mcfDataDirectory = FileNameJoin[{mcfBaseDirectory, \"data\"}];
+ mcfOutputDirectory = FileNameJoin[{mcfBaseDirectory, \"clean_figures\"}];
+ If[!DirectoryQ[mcfDataDirectory], mcfFail[\"The data folder does not exist: \
+\" <> mcfDataDirectory]];
+ mcfTables = {};
+ Do[t = mcfRead[item[[1]], item[[2]]]; AppendTo[mcfTables, item[[1]] -> t], \
+{item, mcfFiles}];
+ If[!DirectoryQ[mcfOutputDirectory],
+  If[Quiet[Check[CreateDirectory[mcfOutputDirectory], $Failed]] === $Failed,
+   mcfFail[\"Cannot create the clean_figures folder.\"]]];
+ mcfReady = True;
+ Print[\"Loaded 11 CSV tables. PDF destination: \", mcfOutputDirectory]; True
+]], \"mcfFailure\"];
+
+mcfSelfTest[] := Catch[Module[{r, f5, f6, f8, f10, sets, step},
+ If[!TrueQ[mcfReady], mcfFail[\"Evaluate the initialization cell first.\"]];
+ f5 = mcfTable[\"fig5_saddle_reconnection\"]; f6 = \
+mcfTable[\"fig6_closed_loop_birth\"];
+ f8 = mcfTable[\"fig8_critical_map\"]; f10 = mcfTable[\"fig10_weak_loss\"];
+ If[Length[mcfUniqueNumbers[mcfColumn[f5, \"panel\"]]] != 3, mcfFail[\"Figure \
+5 must have three panels.\"]];
+ If[!And @@ (MemberQ[mcfColumn[f6, \"dataset\"], #] & /@ {\"discriminant\", \
+\"loop\"}), mcfFail[\"Figure 6 requires discriminant and loop records.\"]];
+ If[!And @@ (MemberQ[mcfColumn[f8, \"type\"], #] & /@ {\"saddle\", \"definite\
+\"}), mcfFail[\"Figure 8 requires both critical types.\"]];
+ Do[r = Select[mcfRows[f10], #[[mcfIndex[f10, \"type\"]]] === typ && \
+#[[mcfIndex[f10, \"loss\"]]] === loss &];
+  If[Length[r] < 2, mcfFail[\"Figure 10 needs at least two samples for \" <> \
+typ <> \", \" <> loss]],
+  {typ, {\"saddle\", \"definite\"}}, {loss, {\"electric\", \"magnetic\"}}];
+ Print[\"CSV and plotting checks PASS. This is a data/formatting check, not a \
+numerical Maxwell SelfTest or interval proof.\"];
+ Print[Grid[Prepend[Table[{item[[1]] <> \".csv\", \
+Length[mcfRows[mcfTable[item[[1]]]]]}, {item, mcfFiles}], {\"Input file\", \
+\"Rows\"}], Frame -> All]];
+ True
+], \"mcfFailure\"];
+
+(* Each series is an ordinary list of rules; no post-version-9 data types. *)
+mcfSeries[xy_, label_, color_, dash_:False, kind_:\"line\", size_:6] :=
+ {\"XY\" -> N[xy], \"Label\" -> label, \"Color\" -> color, \"Dashed\" -> \
+dash, \"Kind\" -> kind, \"Size\" -> size};
+mcfWithMarker[record_, shape_, size_:6.5] := \
+Join[record,{\"Marker\"->shape,\"MarkerSize\"->size}];
+mcfMarkerShape[record_] := \
+Replace[mcfValue[record,\"Marker\"],\"Marker\"->None];
+mcfText[text_, size_:18, weight_:Plain] := Style[text, FontFamily -> mcfFont, \
+FontSize -> size, FontWeight -> weight, FontColor -> Black];
+mcfTransform[xy_, xlog_, ylog_] := Module[{xx = xy},
+ If[!MatrixQ[xx, mcfFiniteQ] || Length[First[xx]] != 2, mcfFail[\"Invalid \
+two-column plotting data.\"]];
+ If[xlog && !And @@ (TrueQ[# > 0] & /@ xx[[All, 1]]), mcfFail[\"A logarithmic \
+horizontal axis received a nonpositive value.\"]];
+ If[ylog && !And @@ (TrueQ[# > 0] & /@ xx[[All, 2]]), mcfFail[\"A logarithmic \
+vertical axis received a nonpositive value.\"]];
+ ({If[xlog, Log[10, #[[1]]], #[[1]]], If[ylog, Log[10, #[[2]]], #[[2]]]} & /@ \
+xx)
+];
+mcfLimits[values_, requested_, log_] := Module[{lo, hi, span},
+ If[ListQ[requested],
+  If[Length[requested] != 2 || !And @@ (mcfFiniteQ /@ requested) || \
+!TrueQ[requested[[1]] < requested[[2]]], mcfFail[\"Invalid requested plot \
+range.\"]];
+  If[log && !TrueQ[requested[[1]] > 0], mcfFail[\"A logarithmic range must be \
+positive.\"]];
+  Return[If[log, Log[10, #] & /@ requested, N[requested]]]];
+ lo = Min[values]; hi = Max[values]; span = hi-lo;
+ If[!TrueQ[span > 0], span = Max[1, Abs[lo]/10]];
+ {lo - 0.045 span, hi + 0.045 span}
+];
+mcfTicks[range_, log_, explicit_:False] := Module[{lo=range[[1]], \
+hi=range[[2]], span, target, power, choices, step, first, last, decimal, a, \
+majors, minors, mantissas},
+ span=hi-lo;
+ If[TrueQ[log] && ListQ[explicit],
+  majors=({N[#],DisplayForm[SuperscriptBox[\"10\",ToString[#,InputForm]]],6}& \
+/@ explicit);
+  minors=Flatten[Table[Table[{N[j-1+Log[10,q]],\"\",3},{q,2,9}],{j,explicit}],\
+1];
+  Return[Select[Join[majors,minors],TrueQ[lo<=#[[1]]<=hi]&]]];
+ If[TrueQ[log],
+  step=If[TrueQ[explicit],1,Max[1, Ceiling[span/6]]];
+  majors=Table[{N[j],If[TrueQ[explicit],DisplayForm[SuperscriptBox[\"10\",\
+ToString[j,InputForm]]],Superscript[10,j]],6},
+   {j,Ceiling[lo/step] step,Floor[hi/step] step,step}];
+  mantissas=If[TrueQ[explicit],Range[2,9],{2,5}];
+  minors=If[step==1 && (span<7 || TrueQ[explicit]),
+   Flatten[Table[Table[{N[j+Log[10, q]], \"\", 3}, {q,mantissas}], \
+{j,Floor[lo],Ceiling[hi]}],1], {}];
+  Return[Select[Join[majors,minors], TrueQ[lo<=#[[1]]<=hi]&]]];
+ target=span/5; power=10^Floor[Log[10,target]];
+ choices=Select[{1,2,2.5,5,10} power, TrueQ[#>=target]&]; step=First[choices];
+ first=Ceiling[(lo-10^-10 step)/step]; last=Floor[(hi+10^-10 step)/step];
+ decimal=Max[0,-Floor[Log[10,step]]+If[mcfNearQ[step/power,2.5],1,0]];
+ Table[a=Chop[N[j step],10^-12]; {a, \
+If[decimal==0,ToString[Round[a],InputForm],
+  NumberForm[a,{12,decimal}, NumberPadding->{\"\",\"0\"}, \
+ExponentFunction->(Null&)]],6}, {j,first,last}]
+];
+mcfPointPrimitives[pts_, kind_, size_, color_, xrange_, yrange_, pw_, ph_] := \
+Module[{dx,dy, vertices},
+ If[Length[pts]==0,Return[{}]];
+ dx=size (xrange[[2]]-xrange[[1]])/(2pw); dy=size \
+(yrange[[2]]-yrange[[1]])/(2ph);
+ Switch[kind,
+  \"square\", {color, (Rectangle[#-{dx,dy}, #+{dx,dy}]& /@ pts)},
+  \"diamond\", {color,(Polygon[{#+{0,dy},#+{dx,0},#+{0,-dy},#+{-dx,0}}]& /@ \
+pts)},
+  \"triangle\", {color,(Polygon[{#+{0,dy},#+{dx,-dy},#+{-dx,-dy}}]& /@ pts)},
+  \"star\", {color, (Polygon[Table[# + If[EvenQ[j],1,0.43] {dx Cos[Pi/2+j \
+Pi/5],dy Sin[Pi/2+j Pi/5]}, {j,0,9}]]& /@ pts)},
+  _, {color, AbsolutePointSize[size], Point[pts]}]
+];
+mcfLegend[series_, width_, ytop_, cols_] := Module[{entries, n, colw, row, \
+col, x, y, label, item, sample, marker, result={}},
+ entries=Select[series, mcfValue[#, \"Label\"] =!= None &]; \
+n=Length[entries]; colw=(width-32)/cols;
+ Do[item=entries[[j]]; row=Floor[(j-1)/cols]; col=Mod[j-1,cols]; x=20+col \
+colw; y=ytop-25 row;
+  sample=If[mcfValue[item,\"Kind\"]==\"line\",
+   {mcfValue[item,\"Color\"],AbsoluteThickness[2.1],If[TrueQ[mcfValue[item,\"\
+Dashed\"]],AbsoluteDashing[{6,4}],AbsoluteDashing[{}]],Line[{{x,y},{x+28,y}}]},
+   mcfPointPrimitives[{{x+14,y}},mcfValue[item,\"Kind\"],mcfValue[item,\"Size\
+\"],mcfValue[item,\"Color\"],{0,width},{0,100},width,100]];
+  marker=mcfMarkerShape[item];
+  If[mcfValue[item,\"Kind\"]==\"line\" && marker=!=None,
+   sample={sample,mcfPointPrimitives[{{x+14,y}},marker,mcfValue[item,\"\
+MarkerSize\"],mcfValue[item,\"Color\"],{0,width},{0,100},width,100]}];
+  AppendTo[result,{sample,Text[mcfText[mcfValue[item,\"Label\"],mcfLegendSize]\
+,{x+36,y},{-1,0}]}], {j,n}]; result
+];
+mcfInsideLegend[series_,left_,bottom_,pw_,ph_,position_,widthFraction_:\
+Automatic] := Module[
+ {entries,n,bw,bh,x,y,widths,item,sample,marker,result={},margin=12,pad=9,\
+lineHeight=25,yy},
+ entries=Select[series,mcfValue[#,\"Label\"] =!= None&];n=Length[entries];
+ If[n==0,Return[{}]];
+ widths=(0.55 mcfLegendSize \
+StringLength[ToString[mcfValue[#,\"Label\"],OutputForm]]& /@ entries);
+ bw=Min[pw-2margin,Max[120,Max[widths]+36+2pad]];bh=n lineHeight+2pad;
+ If[widthFraction=!=Automatic,
+  If[!mcfFiniteQ[widthFraction] || !TrueQ[0<widthFraction<=1],
+   mcfFail[\"A panel legend width must be Automatic or a fraction greater \
+than 0 and at most 1.\"]];
+  bw=Min[pw-2margin,pw N[widthFraction]]];
+ {x,y}=Switch[position,
+  \"TopRight\",{left+pw-margin-bw,bottom+ph-margin-bh},
+  \"TopLeft\",{left+margin,bottom+ph-margin-bh},
+  \"BottomRight\",{left+pw-margin-bw,bottom+margin},
+  \"BottomLeft\",{left+margin,bottom+margin},
+  \"BottomCenter\",{left+(pw-bw)/2,bottom+margin},
+  \"BelowCenter\",{left+(pw-bw)/2,bottom+ph/2-margin-bh},
+  \"MiddleLeft\",{left+margin,bottom+(ph-bh)/2},
+  _,{left+pw-margin-bw,bottom+ph-margin-bh}];
+ AppendTo[result,{EdgeForm[Directive[GrayLevel[0.4],AbsoluteThickness[0.6]]],\
+White,Rectangle[{x,y},{x+bw,y+bh}]}];
+ Do[item=entries[[j]];yy=y+bh-pad-(j-1/2)lineHeight;
+  sample=If[mcfValue[item,\"Kind\"]==\"line\",
+   {mcfValue[item,\"Color\"],AbsoluteThickness[2.1],If[TrueQ[mcfValue[item,\"\
+Dashed\"]],AbsoluteDashing[{6,4}],AbsoluteDashing[{}]],Line[{{x+pad,yy},{x+\
+pad+28,yy}}]},
+   mcfPointPrimitives[{{x+pad+14,yy}},mcfValue[item,\"Kind\"],mcfValue[item,\"\
+Size\"],mcfValue[item,\"Color\"],{0,pw},{0,ph},pw,ph]];
+  marker=mcfMarkerShape[item];
+  If[mcfValue[item,\"Kind\"]==\"line\" && marker=!=None,
+   sample={sample,mcfPointPrimitives[{{x+pad+14,yy}},marker,mcfValue[item,\"\
+MarkerSize\"],mcfValue[item,\"Color\"],{0,pw},{0,ph},pw,ph]}];
+  AppendTo[result,{sample,Text[mcfText[mcfValue[item,\"Label\"],mcfLegendSize]\
+,{x+pad+36,yy},{-1,0}]}],{j,n}];
+ result
+];
+
+(* Clip display segments to the plot rectangle. This changes only the
+   visible portion of a straight plotting segment, never the CSV data. *)
+mcfInsideQ[p_,xr_,yr_] := TrueQ[xr[[1]]<=p[[1]]<=xr[[2]] && \
+yr[[1]]<=p[[2]]<=yr[[2]]];
+mcfClipSegment[p0_,p1_,xr_,yr_] := Module[{d=p1-p0,a=0.,b=1.,pp,qq,u,ok=True},
+ If[Max[p0[[1]],p1[[1]]]<xr[[1]] || Min[p0[[1]],p1[[1]]]>xr[[2]] ||
+    Max[p0[[2]],p1[[2]]]<yr[[1]] || Min[p0[[2]],p1[[2]]]>yr[[2]],Return[{}]];
+ pp={-d[[1]],d[[1]],-d[[2]],d[[2]]};
+ qq={p0[[1]]-xr[[1]],xr[[2]]-p0[[1]],p0[[2]]-yr[[1]],yr[[2]]-p0[[2]]};
+ Do[If[TrueQ[pp[[j]]==0],If[TrueQ[qq[[j]]<0],ok=False;Break[]],
+   u=qq[[j]]/pp[[j]];If[pp[[j]]<0,a=Max[a,u],b=Min[b,u]];
+   If[a>b,ok=False;Break[]]],{j,4}];
+ If[ok,{p0+a d,p0+b d},{}]
+];
+mcfClippedLines[pts_,xr_,yr_,map_] := Module[{segs,clip},
+ If[And@@(mcfInsideQ[#,xr,yr]& /@ pts),Return[{Line[map /@ pts]}]];
+ segs=Partition[pts,2,1];clip=(mcfClipSegment[#[[1]],#[[2]],xr,yr]& /@ segs);
+ Line[map /@ #]& /@ Select[clip,Length[#]==2&]
+];
+mcfShift[primitives_,offset_] := primitives /. {
+ Line[p_List] :> Line[(#+offset)& /@ p],
+ Polygon[p_List] :> Polygon[(#+offset)& /@ p],
+ Rectangle[a_List,b_List] :> Rectangle[a+offset,b+offset],
+ Point[p_List] :> Point[If[VectorQ[p,NumberQ],p+offset,(#+offset)& /@ p]],
+ Text[e_,p_List,rest___] :> Text[e,p+offset,rest]
+};
+
+(* Axes, labels, legends and data are ordinary vector primitives on a
+   single explicitly sized canvas. No nested GraphicsRow, automatic
+   legend placement, or inset padding is involved. *)
+Options[mcfPanel] = {\"Width\"->540, \"PlotHeight\"->300, \"XLog\"->False, \
+\"YLog\"->False,
+ \"XRange\"->Automatic, \"YRange\"->Automatic, \"LegendColumns\"->2, \
+\"VerticalReference\"->None, \"HorizontalReference\"->None,
+ \"LegendPosition\"->\"Outside\",\"LegendWidth\"->Automatic,\"XLogTicks\"->\
+False,\"YLogTicks\"->False,\"XTicks\"->Automatic,\"OriginAxes\"->False};
+mcfPanel[series_, xlabel_, ylabel_, title_, OptionsPattern[]] := Module[
+ {width=OptionValue[\"Width\"], ph=OptionValue[\"PlotHeight\"], \
+xl=OptionValue[\"XLog\"], yl=OptionValue[\"YLog\"],
+  lc=OptionValue[\"LegendColumns\"], left=92, right=22, bottom, top, height, \
+pw, legendRows, legendHeight,
+  transformed, xx, yy, xr, yr, xt, yt, prim={}, axes={}, g, map, x, y, item, \
+pts, vr, hr, labels, all,
+  legendPosition=OptionValue[\"LegendPosition\"],marker,xticks=OptionValue[\"\
+XTicks\"],legend},
+ labels=Select[series,mcfValue[#,\"Label\"] =!= None&];
+ legendRows=If[legendPosition==\"Outside\",Ceiling[Length[labels]/lc],0];
+ legendHeight=If[legendRows>0,25 legendRows+9,8]; bottom=legendHeight+67; \
+top=bottom+ph;
+ height=top+43; pw=width-left-right;
+ transformed=Table[mcfTransform[mcfValue[item,\"XY\"],xl,yl],{item,series}];
+ xx=Flatten[transformed[[All,All,1]]]; yy=Flatten[transformed[[All,All,2]]];
+ xr=mcfLimits[xx,OptionValue[\"XRange\"],xl]; \
+yr=mcfLimits[yy,OptionValue[\"YRange\"],yl];
+ xt=If[ListQ[xticks],Table[{If[xl,Log[10,v],N[v]],ToString[v,InputForm],6},{v,\
+xticks}],mcfTicks[xr,xl,OptionValue[\"XLogTicks\"]]];
+ yt=mcfTicks[yr,yl,OptionValue[\"YLogTicks\"]];
+ map=Function[p,{left+pw(p[[1]]-xr[[1]])/(xr[[2]]-xr[[1]]),bottom+ph(p[[2]]-\
+yr[[1]])/(yr[[2]]-yr[[1]])}];
+ If[TrueQ[OptionValue[\"OriginAxes\"]] && !xl && !yl,
+  If[xr[[1]]<=0<=xr[[2]],AppendTo[prim,{GrayLevel[0.65],AbsoluteDashing[{}],\
+AbsoluteThickness[1],Line[map /@ {{0,yr[[1]]},{0,yr[[2]]}}]}]];
+  If[yr[[1]]<=0<=yr[[2]],AppendTo[prim,{GrayLevel[0.65],AbsoluteDashing[{}],\
+AbsoluteThickness[1],Line[map /@ {{xr[[1]],0},{xr[[2]],0}}]}]]];
+ vr=OptionValue[\"VerticalReference\"]; \
+hr=OptionValue[\"HorizontalReference\"];
+ If[mcfFiniteQ[vr], \
+x=If[xl,Log[10,vr],vr];If[xr[[1]]<=x<=xr[[2]],AppendTo[prim,{GrayLevel[0.72],\
+AbsoluteDashing[{3,4}],AbsoluteThickness[1],Line[map /@ \
+{{x,yr[[1]]},{x,yr[[2]]}}]}]]];
+ If[mcfFiniteQ[hr], \
+y=If[yl,Log[10,hr],hr];If[yr[[1]]<=y<=yr[[2]],AppendTo[prim,{GrayLevel[0.72],\
+AbsoluteDashing[{3,4}],AbsoluteThickness[1],Line[map /@ \
+{{xr[[1]],y},{xr[[2]],y}}]}]]];
+ Do[item=series[[j]];pts=transformed[[j]];
+  AppendTo[prim,If[mcfValue[item,\"Kind\"]==\"line\",
+   {mcfValue[item,\"Color\"],AbsoluteThickness[2.1],If[TrueQ[mcfValue[item,\"\
+Dashed\"]],AbsoluteDashing[{6,4}],AbsoluteDashing[{}]],mcfClippedLines[pts,xr,\
+yr,map]},
+   mcfPointPrimitives[map /@ \
+Select[pts,mcfInsideQ[#,xr,yr]&],mcfValue[item,\"Kind\"],mcfValue[item,\"Size\
+\"],mcfValue[item,\"Color\"],{0,width},{0,height},width,height]]];
+  marker=mcfMarkerShape[item];
+  If[mcfValue[item,\"Kind\"]==\"line\" && marker=!=None,
+   AppendTo[prim,mcfPointPrimitives[map /@ \
+Select[pts,mcfInsideQ[#,xr,yr]&],marker,mcfValue[item,\"MarkerSize\"],\
+mcfValue[item,\"Color\"],{0,width},{0,height},width,height]]],
+ {j,Length[series]}];
+ AppendTo[axes,{mcfBlack,AbsoluteThickness[1.1],Line[{{left,bottom},{left+pw,\
+bottom},{left+pw,top},{left,top},{left,bottom}}]}];
+ Do[x=left+pw (tick[[1]]-xr[[1]])/(xr[[2]]-xr[[1]]);
+  AppendTo[axes,{mcfBlack,AbsoluteThickness[1],Line[{{x,bottom},{x,bottom+\
+tick[[3]]}}],Line[{{x,top},{x,top-tick[[3]]}}],
+    If[tick[[2]]===\"\",{},Text[mcfText[tick[[2]],mcfTickSize],{x,bottom-12},{\
+0,1}]]}],{tick,xt}];
+ Do[y=bottom+ph (tick[[1]]-yr[[1]])/(yr[[2]]-yr[[1]]);
+  AppendTo[axes,{mcfBlack,AbsoluteThickness[1],Line[{{left,y},{left+tick[[3]],\
+y}}],Line[{{left+pw,y},{left+pw-tick[[3]],y}}],
+    If[tick[[2]]===\"\",{},Text[mcfText[tick[[2]],mcfTickSize],{left-10,y},{1,\
+0}]]}],{tick,yt}];
+ legend=If[legendPosition==\"Outside\",mcfLegend[series,width,legendHeight-12,\
+lc],mcfInsideLegend[series,left,bottom,pw,ph,legendPosition,OptionValue[\"\
+LegendWidth\"]]];
+ all={prim,axes,
+   Text[mcfText[title,18,Bold],{width/2,top+24}],
+   Text[mcfText[xlabel,mcfLabelSize],{left+pw/2,bottom-48}],
+   Text[mcfText[ylabel,mcfLabelSize],{22,bottom+ph/2},{0,0},{0,1}],
+   legend};
+ g=Graphics[all,
+  PlotRange->{{0,width},{0,height}},PlotRangePadding->None,PlotRangeClipping->\
+True,
+  ImagePadding->0,ImageMargins->0,ImageSize->{width,height},AspectRatio->\
+height/width,Background->White];
+ {\"Graphic\"->g,\"Primitives\"->all,\"Size\"->{width,height},\"XRange\"->xr,\
+\"YRange\"->yr}
+];
+mcfCompose[panels_] := Module[{sizes,width,height,x=0,prims={},sz,gap=22},
+ sizes=mcfValue[#,\"Size\"]& /@ panels; \
+width=Total[sizes[[All,1]]]+gap(Length[panels]-1);height=Max[sizes[[All,2]]];
+ Do[sz=sizes[[j]];AppendTo[prims,mcfShift[mcfValue[panels[[j]],\"Primitives\"]\
+,{x,height-sz[[2]]}]];x+=sz[[1]]+gap,{j,Length[panels]}];
+ Graphics[prims,PlotRange->{{0,width},{0,height}},PlotRangePadding->None,\
+PlotRangeClipping->True,
+  ImagePadding->0,ImageMargins->0,ImageSize->{width,height},AspectRatio->\
+height/width,Background->White]
+];
+mcfSorted[t_,rows_,key_] := SortBy[rows, #[[mcfIndex[t,key]]]&];
+mcfSplitSamples[t_,rows_] := \
+Module[{ss=mcfSorted[t,rows,\"sample\"],j=mcfIndex[t,\"sample\"]},
+ Split[ss,TrueQ[Abs[#2[[j]]-#1[[j]]]<=1.01]&]];
+(*************************************************************************)
+(*************************************************************************)
+(* FIGURE 1: spheroidal convergence, complete vertical range. *)
+(*************************************************************************)
+(*************************************************************************)
+mcfBuild[1] := Module[{t=mcfTable[\"fig1_spheroid_convergence\"], r, \
+s},r=mcfRows[t];
+ s=MapThread[mcfSeries[mcfXY[t,r,\"lmax\",#1],#2,#3]&,{
+  {\"trace_E\",\"trace_H\",\"affine_current_error\",\"quadratic_power_error\"},
+  {\"Electric trace error\",\"Magnetic trace error\",\"Affine-current \
+discrepancy\",\"Held-out power discrepancy\"},
+  {mcfBlue,mcfOrange,mcfGreen,mcfPurple}}];
+ s=MapThread[mcfWithMarker,{s,{\"circle\",\"square\",\"diamond\",\"triangle\"}\
+}];
+ mcfCompose[{mcfPanel[s,\"Largest interior angular order\",\"Relative error \
+or discrepancy\",\"Prolate spheroid: semiaxes (1, 1, \
+1.3)\",\"Width\"->800,\"PlotHeight\"->420,\"YLog\"->True,\"YLogTicks\"->{0,-4,\
+-8,-12,-16},
+  \"XRange\"->{1,21},\"XTicks\"->{1,5,9,13,17,21},\"LegendPosition\"->\"\
+BottomLeft\",\"LegendColumns\"->1,\"LegendWidth\"->mcfLegendWidth[1,\"a\"]]}]
+];
+(*************************************************************************)
+(*************************************************************************)
+(* FIGURE 2: exact static profiles; no scientific quantities recomputed. *)
+(*************************************************************************)
+(*************************************************************************)
+mcfBuild[2] := \
+Module[{t=mcfTable[\"fig2_static_profiles\"],panels={},base,rhos,s,r,xkey,pol},
+ Do[base=mcfSelect[t,\"polarization\",pol];rhos=mcfUniqueNumbers[base[[All,\
+mcfIndex[t,\"rho\"]]]];s={};xkey=If[pol==\"TM\",\"epsilon\",\"mu\"];
+  Do[r=Select[base,mcfNearQ[#[[mcfIndex[t,\"rho\"]]],rhos[[j]]]&];r=mcfSorted[\
+t,r,xkey];
+   AppendTo[s,mcfSeries[mcfXY[t,r,xkey,\"scaled_exact_q\"],Row[{\"\[Rho] = \
+\",NumberForm[rhos[[j]],{3,2}]}],{mcfBlue,mcfOrange,mcfGreen}[[Mod[j-1,3]+1]]]\
+],{j,Length[rhos]}];
+  AppendTo[s,mcfSeries[mcfXY[t,r,xkey,\"scaled_static_q\"],\"Static \
+limit\",mcfBlack,True]];
+  AppendTo[panels,mcfPanel[s,If[pol==\"TM\",\"\[Epsilon]\",\"\[Mu]\"],
+   Row[{Superscript[\"\[Rho]\",5],\" q\"}],If[pol==\"TM\",\"(a) Electric-type \
+dipole, \[Mu] = -3\",\"(b) Magnetic-type dipole, \[Epsilon] = \
+-3\"],\"HorizontalReference\"->0,
+   \"LegendPosition\"->If[pol==\"TM\",\"BottomRight\",\"TopLeft\"],\"\
+LegendColumns\"->1,\"LegendWidth\"->mcfLegendWidth[2,If[pol==\"TM\",\"a\",\"b\
+\"]]]],{pol,{\"TM\",\"TE\"}}];mcfCompose[panels]
+];
+(*************************************************************************)
+(*************************************************************************)
+(* FIGURE 3: regular tuning graph and nonzero permittivity derivative. *)
+(*************************************************************************)
+(*************************************************************************)
+
+(* FIGURE 3: regular tuning graph and nonzero permittivity derivative. *)
+
+mcfBuild[3] := Module[
+ {t=mcfTable[\"fig3_regular_tuning_graph\"],r,s,p1,p2,reference},
+
+ r=mcfSorted[t,mcfRows[t],\"mu\"];
+
+ s=MapThread[
+   mcfSeries[mcfXY[t,r,\"mu\",#1],#2,#3,#4]&,
+   {
+    {\"epsilon_exact\",\"epsilon_static\",\"epsilon_second_order\"},
+    {
+     \"Exact Maxwell, \[Rho] = 0.16\",
+     \"Leading graph\",
+     Row[{\"Graph through \",Superscript[FromCharacterCode[961],2]}]
+    },
+    {mcfBlue,mcfBlack,mcfOrange},
+    {True,True,False}
+   }
+ ];
+
+ (* Restore the static coordinate-fold point and its legend entry. *)
+ AppendTo[s,
+  mcfSeries[
+   {
+    {
+     -Sqrt[18],
+     -2 + (2 First[mcfColumn[t,\"w\"]]/7) (11-2 Sqrt[18])
+    }
+   },
+   \"Static coordinate fold\",
+   mcfBlack,
+   False,
+   \"circle\",
+   7
+  ]
+ ];
+
+ (* Redraw the exact curve last, without another legend entry. *)
+ AppendTo[s,
+  mcfSeries[
+   mcfXY[t,r,\"mu\",\"epsilon_exact\"],
+   None,
+   mcfBlue,
+   True
+  ]
+ ];
+
+ p1=mcfPanel[
+   s,
+   \"\[Mu]\",
+   \"Tuned \[Epsilon]\",
+   \"(a) Mixed-dipole tuning graph\",
+   \"VerticalReference\"->-Sqrt[18],
+   \"LegendPosition\"->\"BottomCenter\",
+   \"LegendColumns\"->1,
+   \"LegendWidth\"->mcfLegendWidth[3,\"a\"]
+ ];
+
+ reference=({#[[1]],1/4}& /@
+   mcfXY[t,r,\"mu\",\"scaled_F_epsilon_exact\"]);
+
+ s={
+   mcfSeries[
+    mcfXY[t,r,\"mu\",\"scaled_F_epsilon_exact\"],
+    Row[{
+      \"Exact derivative \",
+      Subscript[
+       FromCharacterCode[8706],
+       FromCharacterCode[949]
+      ],
+      \"(\",
+      Superscript[FromCharacterCode[961],5],
+      \" F)\"
+    }],
+    mcfBlue
+   ],
+   mcfSeries[
+    reference,
+    \"Static derivative: 1/4\",
+    mcfBlack,
+    True
+   ]
+ };
+
+ p2=mcfPanel[
+   s,
+   \"\[Mu]\",
+   \"Scaled \[Epsilon] derivative\",
+   \"(b) A regular coordinate fold\",
+   \"VerticalReference\"->-Sqrt[18],
+   \"LegendPosition\"->\"MiddleLeft\",
+   \"LegendColumns\"->1,
+   \"LegendWidth\"->mcfLegendWidth[3,\"b\"]
+ ];
+
+ mcfCompose[{p1,p2}]
+];
+
+(*************************************************************************)
+(*************************************************************************)
+(* FIGURE 4: log-log error convergence with reference slopes 2 and 4. *)
+(*************************************************************************)
+(*************************************************************************)
+
+(* FIGURE 4: log-log error convergence with reference slopes 2 and 4. *)
+
+mcfBuild[4] := Module[
+ {t=mcfTable[\"fig4_asymptotic_convergence\"],
+  r,panels={},v1,v2,x0,y1,y2,s,keys},
+
+ r=mcfSorted[t,mcfRows[t],\"rho\"];
+
+ Do[
+  keys=pair[[1]];
+  v1=mcfXY[t,r,\"rho\",keys[[1]]];
+  v2=mcfXY[t,r,\"rho\",keys[[2]]];
+  x0=v1[[1,1]];
+  y1=v1[[1,2]];
+  y2=v2[[1,2]];
+
+  s={
+   mcfWithMarker[
+    mcfSeries[v1,\"Leading approximation\",mcfBlue],
+    \"circle\"
+   ],
+   mcfWithMarker[
+    mcfSeries[
+     v2,
+     Row[{\"Approximation through \",Superscript[\"\[Rho]\",2]}],
+     mcfOrange
+    ],
+    \"square\"
+   ],
+   mcfSeries[
+    ({#[[1]],y1(#[[1]]/x0)^2}& /@ v1),
+    Row[{\"Order \",Superscript[FromCharacterCode[961],2]}],
+    mcfGray,
+    True
+   ],
+   mcfSeries[
+    ({#[[1]],y2(#[[1]]/x0)^4}& /@ v2),
+    Row[{\"Order \",Superscript[FromCharacterCode[961],4]}],
+    mcfBlack,
+    True
+   ]
+  };
+
+  AppendTo[panels,
+   mcfPanel[
+    s,
+    \"Exterior electrical size \[Rho]\",
+    \"Absolute error\",
+    pair[[2]],
+    \"XLog\"->True,
+    \"YLog\"->True,
+    \"LegendPosition\"->\"BottomRight\",
+    \"LegendColumns\"->1,
+    \"XLogTicks\"->True,
+    \"YLogTicks\"->True,
+    \"LegendWidth\"->mcfLegendWidth[
+     4,
+     If[pair[[1,1]]==\"power_leading_error\",\"a\",\"b\"]
+    ]
+   ]
+  ],
+  {pair,{
+    {
+     {\"power_leading_error\",\"power_second_order_error\"},
+     \"(a) Scaled-power error\"
+    },
+    {
+     {\"gradient_leading_error\",\"gradient_second_order_error\"},
+     \"(b) Material-gradient error\"
+    }
+   }}
+ ];
+
+ mcfCompose[panels]
+];
+
+(* Critical-point plotting anchors are read from Figures 5 and 6 CSVs. *)
+mcfAnchors[] := \
+Module[{t5=mcfTable[\"fig5_saddle_reconnection\"],t6=mcfTable[\"fig6_closed_\
+loop_birth\"],r5,r6,ps,ws,kc,row},
+ ps=mcfUniqueNumbers[mcfColumn[t5,\"panel\"]];r5=mcfSelect[t5,\"panel\",ps[[2]\
+]];kc=(Min[r5[[All,mcfIndex[t5,\"internal_k\"]]]]+Max[r5[[All,mcfIndex[t5,\"\
+internal_k\"]]]])/2;
+ row=First[SortBy[r5,Abs[#[[mcfIndex[t5,\"internal_k\"]]]-kc]&]];
+ r6=mcfSelect[t6,\"dataset\",\"discriminant\"];ws=mcfUniqueNumbers[r6[[All,\
+mcfIndex[t6,\"w\"]]]];
+ If[Length[ws]!=3,mcfFail[\"Figure 6 requires the below/critical/above \
+composition records.\"]];
+ {\"SaddleW\"->Median[r5[[All,mcfIndex[t5,\"w\"]]]],\"SaddleEpsilon\"->row[[\
+mcfIndex[t5,\"epsilon\"]]],\"SaddleMu\"->row[[mcfIndex[t5,\"mu\"]]],\"\
+DefiniteW\"->ws[[2]]}
+];
+(*************************************************************************)
+(*************************************************************************)
+(* FIGURE 5: restrict to the negative-material neighborhood and split
+   missing sample intervals, so branches are never joined across gaps. *)
+(*************************************************************************)
+(*************************************************************************)
+
+mcfBuild[5] := \
+Module[{t=mcfTable[\"fig5_saddle_reconnection\"],a=mcfAnchors[],panels={},ps,\
+r,s,br,parts,ec,mc,wc,title},
+ {ec,mc,wc}=mcfValue[a,#]& /@ \
+{\"SaddleEpsilon\",\"SaddleMu\",\"SaddleW\"};ps=mcfUniqueNumbers[mcfColumn[t,\
+\"panel\"]];
+ Do[r=mcfSelect[t,\"panel\",ps[[j]]];s={};
+  Do[br=Select[r,mcfNearQ[#[[mcfIndex[t,\"branch\"]]],sign] && #[[mcfIndex[t,\
+\"epsilon\"]]]<0 && #[[mcfIndex[t,\"mu\"]]]<0&];parts=mcfSplitSamples[t,br];
+   Do[If[Length[part]>1,AppendTo[s,mcfSeries[mcfXY[t,part,\"epsilon\",\"mu\"],\
+None,mcfBlue]]],{part,parts}],{sign,{1,-1}}];
+  If[j==2,AppendTo[s,mcfSeries[{{ec,mc}},None,mcfBlack,False,\"circle\",7]]];
+  title=Row[{\"(\",FromCharacterCode[96+j],\")  w - w* = \
+\",NumberForm[Chop[Median[r[[All,mcfIndex[t,\"w\"]]]]-wc],{3,2}]}];
+  AppendTo[panels,mcfPanel[s,\"\[Epsilon]\",\"\[Mu]\",title,\"Width\"->360,\"\
+PlotHeight\"->300,
+   \"XRange\"->{ec-.045,ec+.045},\"YRange\"->{mc-.15,mc+.15},\"LegendWidth\"->\
+mcfLegendWidth[5,FromCharacterCode[96+j]]]],{j,3}];mcfCompose[panels]
+];
+
+(*************************************************************************)
+(*************************************************************************)
+(* FIGURE 6: discriminant opening and the complete normal-form loop. *)
+(*************************************************************************)
+(*************************************************************************)
+mcfBuild[6] := \
+Module[{t=mcfTable[\"fig6_closed_loop_birth\"],discrows,ws,crit,kc,r,s={},p1,\
+p2,loops,circle},
+ discrows=mcfSelect[t,\"dataset\",\"discriminant\"];ws=mcfUniqueNumbers[\
+discrows[[All,mcfIndex[t,\"w\"]]]];
+ crit=Select[discrows,mcfNearQ[#[[mcfIndex[t,\"w\"]]],ws[[2]]]&];
+ r=Last[SortBy[crit,#[[mcfIndex[t,\"Delta\"]]]&]];kc=r[[mcfIndex[t,\"internal_\
+k\"]]];
+ Do[r=Select[discrows,mcfNearQ[#[[mcfIndex[t,\"w\"]]],ws[[j]]]&];r=mcfSorted[\
+t,r,\"internal_k\"];
+  AppendTo[s,mcfSeries[({1000(#[[1]]-kc),10^11 #[[2]]}& /@ \
+mcfXY[t,r,\"internal_k\",\"Delta\"]),
+   {Row[{\"Below critical: w - w* = -\",Superscript[10,-7]}],\"At critical: w \
+- w* = 0\",Row[{\"Above critical: w - w* = \
++\",Superscript[10,-7]}]}[[j]],{mcfBlue,mcfBlack,mcfOrange}[[j]],j==2]],{j,3}];
+ p1=mcfPanel[s,Row[{Superscript[10,3],\" (k - \
+k*)\"}],Row[{Superscript[10,11],\" \[CapitalDelta]\"}],\"(a) A critical \
+discriminant maximum\",\"PlotHeight\"->426,\"OriginAxes\"->True,
+  \"LegendPosition\"->\"BottomCenter\",\"LegendColumns\"->1,\"LegendWidth\"->\
+mcfLegendWidth[6,\"a\"]];
+ loops=mcfSelect[t,\"dataset\",\"loop\"];s={};
+ Do[r=Select[loops,mcfNearQ[#[[mcfIndex[t,\"branch\"]]],sign]&];r=mcfSorted[t,\
+r,\"sample\"];
+  AppendTo[s,mcfSeries[mcfXY[t,r,\"normal_form_x\",\"normal_form_y\"],If[sign=\
+=1,\"Exact tuning loop\",None],mcfOrange]],{sign,{1,-1}}];
+ circle=Table[{Cos[u],Sin[u]},{u,0,2Pi,2Pi/400}];AppendTo[s,mcfSeries[circle,\
+\"Leading-order circle\",mcfBlack,True]];
+ AppendTo[s,mcfSeries[{{0,0}},None,mcfBlack,False,\"circle\",6]];
+ p2=mcfPanel[s,\"Normal-form coordinate x\",\"Normal-form coordinate \
+y\",\"(b) Closed curve for w > \
+w*\",\"PlotHeight\"->426,\"XRange\"->{-1.15,1.15},\"YRange\"->{-1.15,1.15},
+  \"OriginAxes\"->True,\"LegendPosition\"->\"BelowCenter\",\"LegendColumns\"->\
+1,\"LegendWidth\"->mcfLegendWidth[6,\"b\"]];mcfCompose[{p1,p2}]
+];
+
+(*************************************************************************)
+(*************************************************************************)
+(* FIGURE 7: stored exact distances/sensitivities and stored predictions. *)
+(*************************************************************************)
+(*************************************************************************)
+
+(* FIGURE 7: stored exact distances/sensitivities and stored predictions. *)
+
+mcfBuild[7] := Module[
+ {t=mcfTable[\"fig7_critical_scaling\"],panels={},s,r,color,label,
+  quadraticColor,foreground},
+
+ Do[
+  s={};
+  foreground={};
+
+  Do[
+   r=mcfSorted[t,mcfSelect[t,\"type\",typ],\"delta_w\"];
+   color=If[typ==\"saddle\",mcfBlue,mcfOrange];
+   label=If[typ==\"saddle\",\"Saddle\",\"Definite\"];
+
+   AppendTo[s,
+    mcfWithMarker[
+     mcfSeries[mcfXY[t,r,\"delta_w\",pair[[1]]],label<> \": exact\",color],
+     If[typ==\"saddle\",\"circle\",\"square\"]
+    ]
+   ];
+
+   quadraticColor=If[typ==\"saddle\",Red,RGBColor[0,0.6,0]];
+   AppendTo[s,
+    mcfSeries[
+     mcfXY[t,r,\"delta_w\",pair[[2]]],
+     label<> \": quadratic\",quadraticColor,True
+    ]
+   ];
+
+   (* Redraw predictions last without adding legend entries. *)
+   AppendTo[foreground,
+    mcfSeries[
+     mcfXY[t,r,\"delta_w\",pair[[2]]],
+     None,quadraticColor,True
+    ]
+   ],
+   {typ,{\"saddle\",\"definite\"}}
+  ];
+
+  s=Join[s,foreground];
+
+  AppendTo[panels,
+   mcfPanel[
+    s,
+    Row[{\"Control increment w - \",Subscript[\"w\",\"*\"],\" > 0\"}],
+    pair[[3]],
+    pair[[4]],
+    \"XLog\"->True,
+    \"YLog\"->True,
+    \"XLogTicks\"->True,
+    \"YLogTicks\"->True,
+    \"LegendPosition\"->If[
+     pair[[1]]==\"material_distance_exact\",\"TopLeft\",\"TopRight\"
+    ],
+    \"LegendColumns\"->1,
+    \"LegendWidth\"->mcfLegendWidth[
+     7,If[pair[[1]]==\"material_distance_exact\",\"a\",\"b\"]
+    ]
+   ]
+  ],
+  {pair,{
+    {
+     \"material_distance_exact\",
+     \"distance_quadratic_prediction\",
+     \"Material distance on the selected ray\",
+     \"(a) Square-root displacement\"
+    },
+    {
+     \"inverse_gradient_exact\",
+     \"inverse_gradient_quadratic_prediction\",
+     Row[{
+       \"Inverse sensitivity \",
+       Superscript[
+        Row[{
+          FromCharacterCode[8214],
+          FromCharacterCode[8711],
+          \"F\",
+          FromCharacterCode[8214]
+        }],
+        -1
+       ]
+     }],
+     \"(b) Inverse tuning sensitivity\"
+    }
+   }}
+ ];
+
+ mcfCompose[panels]
+];
+
+
+(*************************************************************************)
+(*************************************************************************)
+(* FIGURE 8: keep root branches separate and break gaps/poles. *)
+(*************************************************************************)
+(*************************************************************************)
+mcfRootSegments[t_, r_] := Module[{sorted=mcfSorted[t,r,\"k\"],jk=mcfIndex[t,\
+\"k\"],jw=mcfIndex[t,\"w\"],diffs,step},
+ If[Length[sorted]<2,Return[{}]];diffs=Select[Differences[sorted[[All,jk]]],#>\
+0&];
+ If[Length[diffs]==0,Return[{sorted}]];step=Min[diffs];
+ Split[sorted,TrueQ[#2[[jk]]-#1[[jk]] <= 1.6step && \
+Abs[#2[[jw]]-#1[[jw]]]<=20]&]
+];
+mcfBuild[8] := \
+Module[{t=mcfTable[\"fig8_discriminant_root_curves\"],map=mcfTable[\"fig8_\
+critical_map\"],s={},p1,p2,r,parts,rs,rhos,a=mcfAnchors[],used,color},
+ rhos=mcfUniqueNumbers[mcfColumn[t,\"rho\"]];
+ Do[rs=mcfSelect[t,\"rho\",rhos[[j]]];color={mcfBlue,mcfOrange,mcfPurple,\
+mcfGreen}[[Mod[j-1,4]+1]];used=False;
+  Do[r=Select[rs,mcfNearQ[#[[mcfIndex[t,\"branch\"]]],branch]&];parts=\
+mcfRootSegments[t,r];
+   Do[If[Length[part]>1,AppendTo[s,mcfSeries[mcfXY[t,part,\"k\",\"w\"],If[\
+used,None,Row[{\"\[Rho] = \
+\",NumberForm[rhos[[j]],{2,1}]}]],color]];used=True],{part,parts}],
+   {branch,mcfUniqueNumbers[rs[[All,mcfIndex[t,\"branch\"]]]]}],{j,Length[\
+rhos]}];
+ p1=mcfPanel[s,\"Internal wavenumber k\",Row[{\"Positive discriminant roots \
+\",Subscript[\"w\",FromCharacterCode[177]]}],\"(a) Discriminant-root \
+curves\",\"YLog\"->True,\"XRange\"->{0,14},\"YRange\"->{10^-4,250},
+  \"YLogTicks\"->True,\"LegendPosition\"->\"BottomRight\",\"LegendColumns\"->\
+1,\"LegendWidth\"->mcfLegendWidth[8,\"a\"]];
+ s={mcfSeries[mcfXY[map,mcfSelect[map,\"type\",\"saddle\"],\"rho\",\"w\"],\"\
+Saddle candidates\",mcfBlue,False,\"circle\",5.5],
+    mcfSeries[mcfXY[map,mcfSelect[map,\"type\",\"definite\"],\"rho\",\"w\"],\"\
+Definite candidates\",mcfOrange,False,\"square\",6.5],
+    mcfSeries[{{3,mcfValue[a,\"SaddleW\"]},{3,mcfValue[a,\"DefiniteW\"]}},\"\
+Certified examples (Table II)\",mcfBlack,False,\"star\",15]};
+ p2=mcfPanel[s,\"Exterior electrical size \[Rho]\",\"Critical composition \
+w\",\"(b) Candidates inside the stated contrast \
+window\",\"YLog\"->True,\"XRange\"->{1,3.12},
+  \"YLogTicks\"->True,\"LegendPosition\"->\"BottomLeft\",\"LegendColumns\"->1,\
+\"LegendWidth\"->mcfLegendWidth[8,\"b\"]];mcfCompose[{p1,p2}]
+];
+
+(*************************************************************************)
+(*************************************************************************)
+(* FIGURE 9: use complete CSV extrema, including both sensitivity peaks. *)
+(*************************************************************************)
+(*************************************************************************)
+mcfBuild[9] := \
+Module[{t=mcfTable[\"fig9_design_interpretation\"],dws,s={},r,large,p1,p2,p3},
+ dws=mcfUniqueNumbers[mcfColumn[t,\"delta_w\"]];
+ Do[r=mcfSorted[t,mcfSelect[t,\"delta_w\",dws[[j]]],\"phase_radians\"];
+  AppendTo[s,mcfSeries[mcfXY[t,r,\"relative_epsilon_percent\",\"relative_mu_\
+percent\"],{
+    Row[{\"w - \",Subscript[\"w\",\"*\"],\" = \",Superscript[10,-7]}],
+    Row[{\"w - \",Subscript[\"w\",\"*\"],\" = \",Superscript[10,-5]}]
+   }[[j]],{mcfOrange,mcfBlue}[[Mod[j-1,2]+1]],j==2]],{j,Length[dws]}];
+AppendTo[s,mcfSeries[mcfValue[First[s],\"XY\"],None,mcfOrange,False]]; 
+p1=mcfPanel[s,Row[{\"100(\",FromCharacterCode[949],\"/\",Subscript[\
+FromCharacterCode[949],\"*\"],\" - \
+1)\"}],Row[{\"100(\",FromCharacterCode[956],\"/\",Subscript[FromCharacterCode[\
+956],\"*\"],\" - 1)\"}],\"(a) Relative material \
+excursions\",\"Width\"->350,\"PlotHeight\"->300,\"LegendColumns\"->1,\"\
+LegendPosition\"->\"TopRight\",\"LegendWidth\"->mcfLegendWidth[9,\"a\"]];
+p1=p1/.{{mcfBlue,AbsoluteThickness[_],AbsoluteDashing[_],rest___}:>{mcfBlue,\
+AbsoluteThickness[1.2],AbsoluteDashing[{}],rest}}; 
+large=mcfSorted[t,mcfSelect[t,\"delta_w\",Max[dws]],\"phase_radians\"];
+ s={mcfSeries[({#[[1]]/(2Pi),#[[2]]}& /@ \
+mcfXY[t,large,\"phase_radians\",\"fixed_power_resource_ratio\"]),None,\
+mcfOrange]};
+ p2=mcfPanel[s,\"Position around the \
+loop\",Row[{Subscript[FromCharacterCode[8496],\"0\"],\"/\",Subscript[\
+FromCharacterCode[8496],\"0,*\"]}],\"(b) Fixed-power source \
+resource\",\"Width\"->350,\"PlotHeight\"->300,\"XRange\"->{0,1},\"\
+HorizontalReference\"->1,\"LegendWidth\"->mcfLegendWidth[9,\"b\"]];
+ s={mcfSeries[({#[[1]]/(2Pi),#[[2]]}& /@ \
+mcfXY[t,large,\"phase_radians\",\"relative_metric_inverse_sensitivity\"]),\
+None,mcfOrange]};
+ p3=mcfPanel[s,\"Position around the loop\",Subscript[FromCharacterCode[954],\
+\"rel\"],\"(c) Relative retuning \
+sensitivity\",\"Width\"->350,\"PlotHeight\"->300,\"XRange\"->{0,1},\"YLog\"->\
+True,\"YLogTicks\"->True,\"LegendWidth\"->mcfLegendWidth[9,\"c\"]];mcfCompose[\
+{p1,p2,p3}]
+];
+
+
+(*************************************************************************)
+(*************************************************************************)
+(* FIGURE 10: all 12 shifts and the manuscript's zero-loss derivatives. *)
+(*************************************************************************)
+(*************************************************************************)
+mcfBuild[10] := \
+Module[{t=mcfTable[\"fig10_weak_loss\"],s={},p1,p2,r,xy,color,label,rate,\
+colorset,j=0},
+ colorset={mcfBlue,mcfOrange,mcfGreen,mcfPurple};
+ Do[j++;r=Select[mcfRows[t],#[[mcfIndex[t,\"type\"]]]===typ && #[[mcfIndex[t,\
+\"loss\"]]]===loss&];
+  xy=SortBy[({#[[mcfIndex[t,\"eta_e\"]]]+#[[mcfIndex[t,\"eta_m\"]]],Abs[#[[\
+mcfIndex[t,\"w_shift\"]]]]}& /@ r),First];
+  label=If[typ==\"saddle\",\"Saddle\",\"Definite\"]<> \": \"<>loss<> \" loss\";
+  AppendTo[s,mcfWithMarker[mcfSeries[xy,label,colorset[[j]],loss==\"electric\"\
+],{\"circle\",\"square\",\"diamond\",\"triangle\"}[[j]]]],{typ,{\"saddle\",\"\
+definite\"}},{loss,{\"electric\",\"magnetic\"}}];
+ p1=mcfPanel[s,\"Loss component \[Eta]\",Row[{\"|\",Subscript[\"w\",\"c\"],\" \
+- \",Subscript[\"w\",\"*\"],\"|\"}],\"(a) Critical field-composition \
+shifts\",\"XLog\"->True,\"YLog\"->True,
+  \"XLogTicks\"->True,\"YLogTicks\"->True,\"LegendPosition\"->\"BottomRight\",\
+\"LegendColumns\"->1,\"LegendWidth\"->mcfLegendWidth[10,\"a\"]];
+ s={};Do[r=Select[mcfRows[t],#[[mcfIndex[t,\"type\"]]]===typ && \
+#[[mcfIndex[t,\"loss\"]]]===\"magnetic\"&];rate=typ /. mcfMagneticLossRates;
+  xy=SortBy[({#[[mcfIndex[t,\"eta_m\"]]],#[[mcfIndex[t,\"w_shift\"]]]/(rate \
+#[[mcfIndex[t,\"eta_m\"]]])}& /@ r),First];
+  AppendTo[s,mcfWithMarker[mcfSeries[xy,If[typ==\"saddle\",\"Saddle\",\"\
+Definite\"],If[typ==\"saddle\",mcfOrange,mcfPurple]],If[typ==\"saddle\",\"\
+circle\",\"square\"]]],{typ,{\"saddle\",\"definite\"}}];
+ xy=Flatten[mcfValue[#,\"XY\"]& /@ \
+s,1];AppendTo[s,mcfSeries[{{Min[xy[[All,1]]],1},{Max[xy[[All,1]]],1}},\"\
+Linear prediction\",mcfBlack,True]];
+ p2=mcfPanel[s,Row[{\"Magnetic loss \
+\",Subscript[FromCharacterCode[951],FromCharacterCode[956]]}],Row[{
+    \"(\",Subscript[\"w\",\"c\"],\" - \",Subscript[\"w\",\"*\"],\")/(\",
+    Subscript[FromCharacterCode[951],FromCharacterCode[956]],\" \",
+    Subscript[
+     FromCharacterCode[8706],
+     Subscript[FromCharacterCode[951],FromCharacterCode[956]]
+    ],
+    Subscript[\"w\",\"c\"],Subscript[\"|\",\"0\"],\")\"
+   }],\"(b) Magnetic-loss derivative check\",\"XLog\"->True,
+  \"XLogTicks\"->True,\"LegendPosition\"->\"TopLeft\",\"LegendColumns\"->1,\"\
+LegendWidth\"->mcfLegendWidth[10,\"b\"]];mcfCompose[{p1,p2}]
+];
+
+(***********************************************************************)
+mcfFigure[n_Integer] := \
+Catch[Block[{$IterationLimit=10000000},Module[{g,path,result},
+ If[!TrueQ[mcfReady],mcfFail[\"Evaluate the initialization cell first.\"]];
+ If[!TrueQ[1<=n<=10],mcfFail[\"Figure number must be between 1 and 10.\"]];
+ Print[\"Replotting Figure \",n,\" from CSV data...\"];
+ g=mcfBuild[n];
+ If[Head[g]=!=Graphics,mcfFail[\"Figure construction did not return Graphics \
+for figure \"<>ToString[n]]];
+ path=FileNameJoin[{mcfOutputDirectory,mcfOutputNames[[n]]<>\".pdf\"}];
+ result=Quiet[Check[Export[path,g,\"PDF\"],$Failed]];
+ If[result===$Failed || !FileExistsQ[path],mcfFail[\"Could not export Figure \
+\"<>ToString[n]<>\" to \"<>path]];
+ Print[\"Saved \",path];g
+]],\"mcfFailure\"];
+mcfRunAll[] := Column[Table[mcfFigure[n],{n,1,10}],Spacings->2];
+\
+\>", "Code",
+ Evaluatable->False,
+ CellChangeTimes->{{4.004326711959264*^9, 4.0043267246340475`*^9}, {
+   4.004327251447481*^9, 4.004327415012847*^9}, {4.0043276159596424`*^9, 
+   4.004327625710885*^9}, {4.004328406881092*^9, 4.0043284826254845`*^9}, {
+   4.004328566663587*^9, 4.0043285833656*^9}, {4.004328620367725*^9, 
+   4.004328621149249*^9}, {4.0043286661831913`*^9, 4.004328671246722*^9}, {
+   4.004328702271965*^9, 4.0043288063185434`*^9}, 4.0043295717644205`*^9, {
+   4.004329881542818*^9, 4.0043298827145786`*^9}, {4.00432991678146*^9, 
+   4.004329969291748*^9}, {4.0043300173890734`*^9, 4.0043300199672704`*^9}, {
+   4.004330062566531*^9, 4.0043300657706375`*^9}, {4.0043300974940867`*^9, 
+   4.004330107337163*^9}, {4.004330147494465*^9, 4.004330155976161*^9}, {
+   4.004330190634529*^9, 4.004330193072384*^9}, {4.0043302828926797`*^9, 
+   4.00433031219736*^9}, {4.004330583538382*^9, 4.004330583538382*^9}, {
+   4.004330637528273*^9, 4.0043306464070935`*^9}, {4.004331323880168*^9, 
+   4.0043313401635017`*^9}, 4.0043320936905546`*^9, {4.004332362243554*^9, 
+   4.0043325083827596`*^9}, {4.004333780938053*^9, 4.0043337868452992`*^9}, {
+   4.0043345054719353`*^9, 4.0043345061129985`*^9}, {4.0043346324064093`*^9, 
+   4.004334634734932*^9}, {4.0043348587416363`*^9, 4.004334900543705*^9}, {
+   4.0043356002900314`*^9, 4.004335621831195*^9}, {4.004335977844186*^9, 
+   4.0043360203661633`*^9}, {4.0043375787954063`*^9, 4.004337583843511*^9}, {
+   4.004337797226569*^9, 4.00433781440654*^9}, {4.0043379604924374`*^9, 
+   4.0043379685934973`*^9}, {4.004338169687961*^9, 4.004338175291703*^9}, {
+   4.0043396911500263`*^9, 4.0043396934938493`*^9}, {4.004339822188816*^9, 
+   4.0043398442001324`*^9}, {4.0043403312239866`*^9, 4.004340361012918*^9}, {
+   4.004340433529733*^9, 4.004340529135468*^9}, {4.004340639055423*^9, 
+   4.0043406756296573`*^9}, {4.0043413407360587`*^9, 4.004341344299578*^9}, {
+   4.0043413876546063`*^9, 4.004341538271883*^9}, {4.0043415832133713`*^9, 
+   4.004341591373974*^9}, {4.004341774587779*^9, 4.0043418431051135`*^9}, {
+   4.004342499536908*^9, 4.0043425052822523`*^9}, {4.004342557605454*^9, 
+   4.0043425818131275`*^9}, 4.0043426124281197`*^9, {4.0043426643838205`*^9, 
+   4.0043426834243298`*^9}, {4.0043428224086742`*^9, 4.004342835276404*^9}, {
+   4.0043429346282377`*^9, 4.0043429363942394`*^9}, 4.0043430045753145`*^9, 
+   4.0043433105021906`*^9, {4.0043434561683407`*^9, 4.004343458137765*^9}, {
+   4.0043435516853714`*^9, 4.0043435556241164`*^9}, {4.0043458964690742`*^9, 
+   4.0043459012363777`*^9}, 4.0043464659698896`*^9, {4.0043466375671854`*^9, 
+   4.0043466387238865`*^9}, {4.004346691657423*^9, 4.004346809583247*^9}, {
+   4.004352362098259*^9, 4.0043523673802495`*^9}, {4.00435314314546*^9, 
+   4.004353227809757*^9}, 4.0043533376760054`*^9, {4.004353521886791*^9, 
+   4.004353529482421*^9}, {4.004353685176959*^9, 4.004353850895811*^9}, {
+   4.0043540275778656`*^9, 4.00435403600294*^9}, {4.0043569521628075`*^9, 
+   4.0043569544193034`*^9}, {4.004362549975196*^9, 4.00436255360581*^9}},
+ FontFamily->"Courier",
+ FontSize->11,
+ CellTags->"mcfPlainSource"]
+}, Closed]],
+
+Cell[CellGroupData[{
+
+Cell["1. Load the embedded plotting definitions", "Section"],
+
+Cell["\<\
+Evaluate this input cell first. It loads the ordinary Wolfram code stored \
+above. The source cell itself is intentionally not evaluatable.\
+\>", "Text"],
+
+Cell[BoxData[
+ RowBox[{"Module", "[", 
+  RowBox[{
+   RowBox[{"{", "embedded", "}"}], ",", 
+   RowBox[{
+    RowBox[{"embedded", "=", 
+     RowBox[{"Cases", "[", 
+      RowBox[{
+       RowBox[{"NotebookGet", "[", 
+        RowBox[{"EvaluationNotebook", "[", "]"}], "]"}], ",", 
+       RowBox[{
+        RowBox[{"Cell", "[", 
+         RowBox[{"code_", ",", "\"\<Code\>\"", ",", "___"}], "]"}], 
+        "\[RuleDelayed]", "code"}], ",", "Infinity"}], "]"}]}], ";", 
+    "\[IndentingNewLine]", 
+    RowBox[{"If", "[", 
+     RowBox[{
+      RowBox[{
+       RowBox[{"Length", "[", "embedded", "]"}], "=!=", "1"}], ",", 
+      RowBox[{
+       RowBox[{"Print", "[", 
+        RowBox[{
+        "\"\<Expected exactly one embedded Code cell; found \>\"", ",", 
+         RowBox[{"Length", "[", "embedded", "]"}], ",", "\"\<.\>\""}], "]"}], 
+       ";", "\[IndentingNewLine]", 
+       RowBox[{"Return", "[", "$Failed", "]"}]}]}], "]"}], ";", 
+    "\[IndentingNewLine]", 
+    RowBox[{"Check", "[", 
+     RowBox[{
+      RowBox[{"Replace", "[", 
+       RowBox[{
+        RowBox[{"First", "[", "embedded", "]"}], ",", 
+        RowBox[{"{", 
+         RowBox[{
+          RowBox[{"code_String", "\[RuleDelayed]", 
+           RowBox[{"ToExpression", "[", 
+            RowBox[{"code", ",", "InputForm"}], "]"}]}], ",", 
+          RowBox[{
+           RowBox[{"BoxData", "[", "boxes_", "]"}], "\[RuleDelayed]", 
+           RowBox[{"ToExpression", "[", 
+            RowBox[{"boxes", ",", "StandardForm"}], "]"}]}], ",", 
+          RowBox[{"_", "\[RuleDelayed]", "$Failed"}]}], "}"}]}], "]"}], ",", 
+      "$Failed"}], "]"}]}]}], "]"}]], "Input",
+ InitializationCell->True,
+ CellChangeTimes->{4.0043313789458313`*^9}]
+}, Open  ]],
+
+Cell[CellGroupData[{
+
+Cell["2. Read and check the data", "Section"],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[
+ RowBox[{"mcfInitialize", "[", 
+  RowBox[{"NotebookDirectory", "[", "]"}], "]"}]], "Input"],
+
+}, Open  ]],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[
+ RowBox[{"mcfSelfTest", "[", "]"}]], "Input"]
+}, Open  ]],
+
+Cell["\<\
+A successful input check prints PASS. This verifies the CSV inputs and \
+plotting requirements; it does not replace the numerical Maxwell SelfTest or \
+an interval-certificate verification.\
+\>", "Text"],
+
+Cell["\<\
+Each panel has an independent legend-width setting immediately before its \
+figure command. Automatic preserves the current appearance. Replace Automatic \
+with a fraction such as 0.55 to use 55% of that panel's plot width, subject \
+to the existing margins. Evaluate the edited setting cell, then the figure \
+command. A single-panel figure uses panel a. Settings for panels without \
+legends have no effect. Box-width changes do not wrap or resize the legend \
+text.\
+\>", "Text"]
+}, Open  ]],
+
+Cell[CellGroupData[{
+
+Cell["Figure 1: spheroidal convergence", "Section"],
+
+Cell["All four residual curves use the complete logarithmic range.", "Text"],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{
+   RowBox[{"mcfLegendWidth", "[", 
+    RowBox[{"1", ",", "\"\<a\>\""}], "]"}], "=", "0.35"}], ";"}]], "Input",
+ CellChangeTimes->{{4.0043253382724314`*^9, 4.0043253394940357`*^9}, {
+   4.0043253978243327`*^9, 4.004325423999112*^9}, 4.00432767178424*^9, 
+   4.0043277211880445`*^9, 4.0043624510492983`*^9, 4.004362497300285*^9, 
+   4.004363816235394*^9, 4.0043641560553017`*^9, 4.0043648201779094`*^9}],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[
+ RowBox[{"mcfFigure", "[", "1", "]"}]], "Input"]
+}, Open  ]]
+}, Open  ]],
+
+Cell[CellGroupData[{
+
+Cell["Figure 2: static dipole profiles", "Section"],
+
+Cell["\<\
+Exact and static curves are read directly from the CSV table.\
+\>", "Text"],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{
+   RowBox[{"mcfLegendWidth", "[", 
+    RowBox[{"2", ",", "\"\<a\>\""}], "]"}], "=", "0.30"}], ";"}]], "Input",
+ CellChangeTimes->{{4.0043254604315214`*^9, 4.004325461697345*^9}, 
+   4.0043280432911425`*^9, 4.0043280776312637`*^9, 4.0043281089198885`*^9, 
+   4.0043626378542857`*^9, 4.004363854977667*^9, {4.0043638917999167`*^9, 
+   4.0043638923942804`*^9}, 4.0043648565260925`*^9, 4.004410068750429*^9}],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{
+   RowBox[{"mcfLegendWidth", "[", 
+    RowBox[{"2", ",", "\"\<b\>\""}], "]"}], "=", "0.33"}], ";"}]], "Input",
+ CellChangeTimes->{{4.004325470349083*^9, 4.0043254714583893`*^9}, 
+   4.0043280478860407`*^9, 4.004328079350851*^9, 4.0043281136905823`*^9, 
+   4.004362640604799*^9, 4.004363857103833*^9, {4.0043638964106536`*^9, 
+   4.004363897083113*^9}, 4.004364858308236*^9, 4.004410074124194*^9}],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[
+ RowBox[{"mcfFigure", "[", "2", "]"}]], "Input"]
+}, Open  ]]
+}, Open  ]],
+
+Cell[CellGroupData[{
+
+Cell["Figure 3: regular tuning graph", "Section"],
+
+Cell["\<\
+The static fold guide is at mu = -sqrt(18); the reference derivative is 1/4.\
+\>", "Text"],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{
+   RowBox[{"mcfLegendWidth", "[", 
+    RowBox[{"3", ",", "\"\<a\>\""}], "]"}], "=", "0.5"}], ";"}]], "Input",
+ CellChangeTimes->{{4.004327025246706*^9, 4.0043270264500723`*^9}, {
+   4.0043316915974317`*^9, 4.0043316920974035`*^9}, {4.004331739866832*^9, 
+   4.004331764403702*^9}, 4.004332196597478*^9, 4.004332287320033*^9, 
+   4.0043349460322237`*^9, {4.0043350051401343`*^9, 4.004335030078662*^9}, 
+   4.0043356961037235`*^9}],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{
+   RowBox[{"mcfLegendWidth", "[", 
+    RowBox[{"3", ",", "\"\<b\>\""}], "]"}], "=", "0.5"}], ";"}]], "Input",
+ CellChangeTimes->{{4.0043270357019353`*^9, 4.0043270367646947`*^9}, {
+   4.0043317064761376`*^9, 4.0043317309933295`*^9}, 4.0043349994045105`*^9}],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[
+ RowBox[{"mcfFigure", "[", "3", "]"}]], "Input"]
+}, Open  ]]
+}, Open  ]],
+
+Cell[CellGroupData[{
+
+Cell["Figure 4: asymptotic convergence", "Section"],
+
+Cell["\<\
+Slope-2 and slope-4 guides are normalized at the smallest sampled size.\
+\>", "Text"],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{
+   RowBox[{"mcfLegendWidth", "[", 
+    RowBox[{"4", ",", "\"\<a\>\""}], "]"}], "=", "0.53"}], ";"}]], "Input",
+ CellChangeTimes->{{4.0043357725644865`*^9, 4.004335773674057*^9}, {
+  4.004362688688885*^9, 4.0043627173346467`*^9}}],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{
+   RowBox[{"mcfLegendWidth", "[", 
+    RowBox[{"4", ",", "\"\<b\>\""}], "]"}], "=", "0.53"}], ";"}]], "Input",
+ CellChangeTimes->{{4.0043357780033207`*^9, 4.0043357792379303`*^9}, 
+   4.004362690830262*^9, 4.004362721335381*^9}],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[
+ RowBox[{"mcfFigure", "[", "4", "]"}]], "Input"]
+}, Open  ]]
+}, Open  ]],
+
+Cell[CellGroupData[{
+
+Cell["Figure 5: saddle reconnection", "Section"],
+
+Cell["\<\
+Missing sample intervals remain separate, so disconnected branches are not \
+joined.\
+\>", "Text"],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{"mcfLegendWidth", "[", 
+   RowBox[{"5", ",", "\"\<a\>\""}], "]"}], "=", "Automatic", ";"}]], "Input"],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{"mcfLegendWidth", "[", 
+   RowBox[{"5", ",", "\"\<b\>\""}], "]"}], "=", "Automatic", ";"}]], "Input"],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{"mcfLegendWidth", "[", 
+   RowBox[{"5", ",", "\"\<c\>\""}], "]"}], "=", "Automatic", ";"}]], "Input"],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[
+ RowBox[{"mcfFigure", "[", "5", "]"}]], "Input"]
+}, Open  ]]
+}, Open  ]],
+
+Cell[CellGroupData[{
+
+Cell["Figure 6: closed-loop creation", "Section"],
+
+Cell["\<\
+Both loop branches and the full leading-order circle are shown with equal \
+normal-form scales.\
+\>", "Text"],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{
+   RowBox[{"mcfLegendWidth", "[", 
+    RowBox[{"6", ",", "\"\<a\>\""}], "]"}], "=", "0.6"}], ";"}]], "Input",
+ CellChangeTimes->{{4.0043399685595045`*^9, 4.00433996987219*^9}, 
+   4.0043405613032637`*^9, {4.0043431072029715`*^9, 4.0043431333537235`*^9}, 
+   4.004362772007015*^9}],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{
+   RowBox[{"mcfLegendWidth", "[", 
+    RowBox[{"6", ",", "\"\<b\>\""}], "]"}], "=", "0.45"}], ";"}]], "Input",
+ CellChangeTimes->{{4.004339977234475*^9, 4.0043399782190723`*^9}, {
+  4.0043405714163218`*^9, 4.0043405716506834`*^9}}],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[
+ RowBox[{"mcfFigure", "[", "6", "]"}]], "Input"]
+}, Open  ]]
+}, Open  ]],
+
+Cell[CellGroupData[{
+
+Cell["Figure 7: critical scaling", "Section"],
+
+Cell["\<\
+Stored distances, sensitivities and predictions are used without recomputing \
+roots.\
+\>", "Text"],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{
+   RowBox[{"mcfLegendWidth", "[", 
+    RowBox[{"7", ",", "\"\<a\>\""}], "]"}], "=", "0.4"}], ";"}]], "Input",
+ CellChangeTimes->{{4.004343619812854*^9, 4.004343620829053*^9}, 
+   4.00434373854801*^9}],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{
+   RowBox[{"mcfLegendWidth", "[", 
+    RowBox[{"7", ",", "\"\<b\>\""}], "]"}], "=", "0.4"}], ";"}]], "Input",
+ CellChangeTimes->{{4.0043436259395185`*^9, 4.0043436273615866`*^9}, 
+   4.004343657556265*^9, 4.004343741314597*^9}],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[
+ RowBox[{"mcfFigure", "[", "7", "]"}]], "Input"]
+}, Open  ]]
+}, Open  ]],
+
+Cell[CellGroupData[{
+
+Cell["Figure 8: critical-point map", "Section"],
+
+Cell["\<\
+Black stars identify the previously certified Table II examples. Other \
+markers are numerical candidates.\
+\>", "Text"],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{
+   RowBox[{"mcfLegendWidth", "[", 
+    RowBox[{"8", ",", "\"\<a\>\""}], "]"}], "=", "0.23"}], ";"}]], "Input",
+ CellChangeTimes->{{4.0043473615851974`*^9, 4.004347364054329*^9}, 
+   4.0043474133358574`*^9, 4.0043474574176955`*^9, 4.004347517140478*^9}],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{
+   RowBox[{"mcfLegendWidth", "[", 
+    RowBox[{"8", ",", "\"\<b\>\""}], "]"}], "=", "0.55"}], ";"}]], "Input",
+ CellChangeTimes->{{4.0043473695090103`*^9, 4.004347370322016*^9}, 
+   4.0043474202596264`*^9, 4.0043474619653807`*^9, 4.004347526314837*^9, 
+   4.0043628271796618`*^9}],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[
+ RowBox[{"mcfFigure", "[", "8", "]"}]], "Input"]
+}, Open  ]]
+}, Open  ]],
+
+Cell[CellGroupData[{
+
+Cell["Figure 9: fixed-power interpretation", "Section"],
+
+Cell["\<\
+Complete CSV extrema determine the ranges, including both sensitivity peaks.\
+\>", "Text"],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{
+   RowBox[{"mcfLegendWidth", "[", 
+    RowBox[{"9", ",", "\"\<a\>\""}], "]"}], "=", "0.63"}], ";"}]], "Input",
+ CellChangeTimes->{{4.0043525617407217`*^9, 4.0043525628346996`*^9}, 
+   4.0043525934581647`*^9, 4.0043628848923435`*^9, 4.0043629458865795`*^9}],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{"mcfLegendWidth", "[", 
+   RowBox[{"9", ",", "\"\<b\>\""}], "]"}], "=", "Automatic", ";"}]], "Input"],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{"mcfLegendWidth", "[", 
+   RowBox[{"9", ",", "\"\<c\>\""}], "]"}], "=", "Automatic", ";"}]], "Input"],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[
+ RowBox[{"mcfFigure", "[", "9", "]"}]], "Input"]
+}, Open  ]]
+}, Open  ]],
+
+Cell[CellGroupData[{
+
+Cell["Figure 10: weak-loss shifts", "Section"],
+
+Cell["\<\
+The right-panel reference derivatives are 16.30703156275055 and \
+-0.02851444687408144, as declared near the top of the embedded code. No loss \
+continuation is recomputed.\
+\>", "Text"],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{
+   RowBox[{"mcfLegendWidth", "[", 
+    RowBox[{"10", ",", "\"\<a\>\""}], "]"}], "=", "0.47"}], ";"}]], "Input",
+ CellChangeTimes->{{4.0043499096141744`*^9, 4.0043499105987797`*^9}, 
+   4.004349955417778*^9, {4.004362993672202*^9, 4.0043629942347045`*^9}}],
+
+Cell[BoxData[
+ RowBox[{
+  RowBox[{
+   RowBox[{"mcfLegendWidth", "[", 
+    RowBox[{"10", ",", "\"\<b\>\""}], "]"}], "=", "0.4"}], ";"}]], "Input",
+ CellChangeTimes->{{4.0043499172724857`*^9, 4.0043499182259088`*^9}, {
+   4.0043499483536882`*^9, 4.0043499496195393`*^9}, 4.0043630004553967`*^9}],
+
+Cell[CellGroupData[{
+
+Cell[BoxData[
+ RowBox[{"mcfFigure", "[", "10", "]"}]], "Input"]
+}, Open  ]]
+}, Open  ]],
+
+Cell[CellGroupData[{
+
+Cell["Repeating or adjusting the plots", "Section"],
+
+Cell["\<\
+Once loading and the data check have succeeded, re-evaluate an individual \
+mcfFigure[n] cell to replot and export only that figure. The command \
+mcfRunAll[] repeats all ten. Re-evaluate mcfInitialize[NotebookDirectory[]] \
+if the CSV files change. Save the notebook after evaluation to retain the \
+displayed figures.\
+\>", "Text"],
+
+Cell["\<\
+Colors and font sizes are declared near the beginning of the embedded source. \
+Source edits take effect after re-evaluating the loader, initialization and \
+check cells. Existing PDFs with matching names in clean_figures are replaced; \
+the input CSVs remain unchanged.\
+\>", "Text"],
+
+Cell["\<\
+Only eleven primary CSV files are used. The extended-asymptotic, \
+candidate-count, higher-multipole and certificate files are not plotting \
+inputs.\
+\>", "Text"]
+}, Open  ]]
+}, Open  ]]
+},
+WindowSize->{1030, 576},
+WindowMargins->{{7, Automatic}, {Automatic, 0}},
+WindowTitle->Automatic,
+TaggingRules->{
+ "PlotNotebookVersion" -> "1.0.10", "TargetKernel" -> "Mathematica 9.0"},
+CellContext->"Global`",
+FrontEndVersion->"9.0 for Microsoft Windows (64-bit) (November 20, 2012)",
+StyleDefinitions->"Default.nb"
+]

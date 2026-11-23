@@ -1,0 +1,52 @@
+[
+  {
+    "file": "fig10_weak_loss.pdf",
+    "manuscript_page": 39,
+    "drawing_stream_identical": true
+  },
+  {
+    "file": "fig1_spheroid_convergence.pdf",
+    "manuscript_page": 19,
+    "drawing_stream_identical": true
+  },
+  {
+    "file": "fig2_static_profiles.pdf",
+    "manuscript_page": 27,
+    "drawing_stream_identical": true
+  },
+  {
+    "file": "fig3_regular_tuning_graph.pdf",
+    "manuscript_page": 28,
+    "drawing_stream_identical": true
+  },
+  {
+    "file": "fig4_asymptotic_convergence.pdf",
+    "manuscript_page": 28,
+    "drawing_stream_identical": true
+  },
+  {
+    "file": "fig5_saddle_reconnection.pdf",
+    "manuscript_page": 30,
+    "drawing_stream_identical": true
+  },
+  {
+    "file": "fig6_closed_loop_birth.pdf",
+    "manuscript_page": 30,
+    "drawing_stream_identical": true
+  },
+  {
+    "file": "fig7_critical_scaling.pdf",
+    "manuscript_page": 31,
+    "drawing_stream_identical": true
+  },
+  {
+    "file": "fig8_critical_map.pdf",
+    "manuscript_page": 33,
+    "drawing_stream_identical": true
+  },
+  {
+    "file": "fig9_design_interpretation.pdf",
+    "manuscript_page": 34,
+    "drawing_stream_identical": true
+  }
+]
